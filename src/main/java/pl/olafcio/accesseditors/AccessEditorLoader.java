@@ -105,18 +105,21 @@ public class AccessEditorLoader {
                     switch (elementType) {
                         case "class" -> modifications.computeIfAbsent(classname, _ -> new ArrayList<>())
                                                      .add(new Modification.ClassKW(
-                                                             ClassKeyword.valueOf(keyword.toUpperCase().replace("-", "_"))
+                                                             ClassKeyword.valueOf(keyword.toUpperCase().replace("-", "_")),
+                                                             mode
                                                      ));
 
                         case "method" -> modifications.computeIfAbsent(classname, _ -> new ArrayList<>())
                                                       .add(new Modification.MethodKW(
                                                               MethodKeyword.valueOf(keyword.toUpperCase().replace("-", "_")),
+                                                              mode,
                                                               words[3]
                                                       ));
 
                         case "field" -> modifications.computeIfAbsent(classname, _ -> new ArrayList<>())
                                                      .add(new Modification.FieldKW(
                                                              FieldKeyword.valueOf(keyword.toUpperCase().replace("-", "_")),
+                                                             mode,
                                                              words[3]
                                                      ));
 
@@ -150,20 +153,20 @@ public class AccessEditorLoader {
 
                     for (Modification mod : mods) {
                         switch (mod) {
-                            case Modification.ClassKW(ClassKeyword keyword) ->
-                                    keyword.add(node);
+                            case Modification.ClassKW(ClassKeyword keyword, Mode mode) ->
+                                    keyword.toggle(node, mode == Mode.ADD);
 
-                            case Modification.FieldKW(FieldKeyword keyword, String fieldName) ->
-                                    keyword.add(node.fields.stream()
-                                            .filter(f -> f.name.equals(fieldName))
-                                            .findAny()
-                                            .orElseThrow());
+                            case Modification.FieldKW(FieldKeyword keyword, Mode mode, String fieldName) ->
+                                    keyword.toggle(node.fields.stream()
+                                                              .filter(f -> f.name.equals(fieldName))
+                                                              .findAny()
+                                                              .orElseThrow(), mode == Mode.ADD);
 
-                            case Modification.MethodKW(MethodKeyword keyword, String signature) ->
-                                    keyword.add(node.methods.stream()
-                                            .filter(f -> (f.name + f.desc).equals(signature))
-                                            .findAny()
-                                            .orElseThrow());
+                            case Modification.MethodKW(MethodKeyword keyword, Mode mode, String signature) ->
+                                    keyword.toggle(node.methods.stream()
+                                                               .filter(f -> (f.name + f.desc).equals(signature))
+                                                               .findAny()
+                                                               .orElseThrow(), mode == Mode.ADD);
 
                             default ->
                                     throw new UnsupportedOperationException("Unsupported operation %s".formatted(mod));

@@ -98,6 +98,12 @@ public enum ClassKeyword {
             node.access -= access;
     }
 
+    public void toggle(ClassNode node, boolean value) {
+        if (value)
+            add(node);
+        else remove(node);
+    }
+
     private static String getType(ClassNode node) {
         return ((node.access & ACC_ENUM)       == ACC_ENUM)       ? "enum"       :
                ((node.access & ACC_RECORD)     == ACC_RECORD)     ? "record"     :

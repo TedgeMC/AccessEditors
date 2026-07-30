@@ -89,4 +89,10 @@ public enum MethodKeyword {
         if ((node.access & access) == access)
             node.access -= access;
     }
+
+    public void toggle(MethodNode node, boolean value) {
+        if (value)
+            add(node);
+        else remove(node);
+    }
 }
