@@ -2,7 +2,6 @@ package pl.olafcio.accesseditors;
 
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.NullUnmarked;
-import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
@@ -14,16 +13,15 @@ import pl.olafcio.accesseditors.file.Properties;
 import pl.olafcio.accesseditors.keyword.impl.ClassKeyword;
 import pl.olafcio.accesseditors.keyword.impl.FieldKeyword;
 import pl.olafcio.accesseditors.keyword.impl.MethodKeyword;
+import pl.olafcio.accesseditors.lang.Lexer;
 
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 import java.lang.instrument.Instrumentation;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
-
-import static pl.olafcio.accesseditors.util.StringListUtil.*;
+import java.util.function.Supplier;
 
 /**
  * The class used to load access editors in a java agent.
@@ -38,39 +36,35 @@ public class AccessEditorLoader {
      * Parses the provided access editor and saves its goals.
      * @param accessEditor The access editor text content.
      */
+    @SuppressWarnings("StatementWithEmptyBody")
     public void add(String accessEditor) {
-        var linesraw = accessEditor.replace("\r", "\n").replace("\n\n", "\n").split("\n");
-        var lines = Arrays.asList(linesraw);
+        var lexer = new Lexer(accessEditor);
 
-        expect(lines, "accesseditor v1");
+        lexer.expect("accesseditor v1");
 
         var properties = new Properties();
 
-        while (!lines.isEmpty())
+        while (!lexer.reachedEOF())
         {
-            var orig = lines.getFirst();
-            var line = orig.stripIndent();
-
-            if (line.isEmpty())
+            if (lexer.now(' '));
+            else if (lexer.now('\n'));
+            else if (lexer.now("#"))
+                lexer.until('\n');
+            else if (lexer.now("["))
             {
-                lines.removeFirst();
-            }
-            else if (line.startsWith("["))
-            {
-                skip(lines, 1 + (orig.length() - line.length()));
-                expect(lines, '"');
+                lexer.expect('"');
 
-                var key = until(lines, '"');
-                expect(lines, ' ');
-                var value = until(lines, ']');
+                var key = lexer.until('"');
+                lexer.expect(' ');
+                var value = lexer.until(']');
 
                 properties.put(key, value);
 
-                expect(lines, '\n');
-            }
-            else if (line.startsWith("#"))
-            {
-                lines.removeFirst();
+                while (lexer.now(' '));
+                if (lexer.now("#"))
+                    lexer.until('\n');
+
+                lexer.expect('\n');
             }
             else
             {
@@ -78,29 +72,41 @@ public class AccessEditorLoader {
                 {
                     Mode mode;
 
-                    if (line.startsWith("+"))
+                    if (lexer.now("+"))
                         mode = Mode.ADD;
-                    else if (line.startsWith("-"))
+                    else if (lexer.now("-"))
                         mode = Mode.REMOVE;
                     else break modification;
 
-                    line = line.substring(1);
-
-                    var words = line.stripTrailing().split(" ");
-
-                    var keyword = words[0];
+                    var keyword = lexer.until(' ');
                     if (keyword.contains("_"))
                         throw new SyntaxException("Keyword contains underscores (_); did you confuse it with the class or field name?");
 
-                    var elementType = words[1];
-                    var elementWords = elementType.equals("class") ? 3 : 4;
+                    while (lexer.now(' '));
 
-                    if (words.length != elementWords)
-                        throw new SyntaxException("Expected %d words, got %d".formatted(elementWords, words.length));
+                    var elementType = lexer.until(' ');
+                    while (lexer.now(' '));
 
-                    var classname = words[2];
+                    var classname = lexer.until(' ');
+                    while (lexer.now(' '));
+
                     if (classname.contains("."))
                         throw new SyntaxException("Type name contains dots (.); it should be separated by slashes (/)");
+
+                    IO.println("[AccessEditors] Deferring %s %s %s".formatted(mode.name().toLowerCase(), elementType, keyword));
+
+                    Supplier<String> fourthgetter = () -> {
+                        var value = new StringBuilder();
+
+                        while (!lexer.reachedEOF()) {
+                            if (lexer.future('\n') || lexer.future(' '))
+                                break;
+
+                            value.appendCodePoint(lexer.consume());
+                        }
+
+                        return value.toString();
+                    };
 
                     switch (elementType) {
                         case "class" -> modifications.computeIfAbsent(classname, _ -> new ArrayList<>())
@@ -113,24 +119,31 @@ public class AccessEditorLoader {
                                                       .add(new Modification.MethodKW(
                                                               MethodKeyword.valueOf(keyword.toUpperCase().replace("-", "_")),
                                                               mode,
-                                                              words[3]
+                                                              fourthgetter.get()
                                                       ));
 
                         case "field" -> modifications.computeIfAbsent(classname, _ -> new ArrayList<>())
                                                      .add(new Modification.FieldKW(
                                                              FieldKeyword.valueOf(keyword.toUpperCase().replace("-", "_")),
                                                              mode,
-                                                             words[3]
+                                                             fourthgetter.get()
                                                      ));
 
                         default ->
                                 throw new SyntaxException("Expected class, method or field; got '%s'".formatted(elementType));
                     }
 
+                    while (lexer.now(' '));
+                    if (lexer.now("#"))
+                        lexer.until('\n');
+
+                    if (!lexer.reachedEOF())
+                        lexer.expect('\n');
+
                     continue;
                 }
 
-                throw new SyntaxException("Unexpected '%s'".formatted(line));
+                throw new SyntaxException("Unexpected '%c'".formatted(lexer.peek(0)));
             }
         }
     }
@@ -149,28 +162,41 @@ public class AccessEditorLoader {
 
                     reader.accept(node, Opcodes.ASM9);
 
-                    var mods = modifications.get(className);
+                    try {
+                        var mods = modifications.get(className);
 
-                    for (Modification mod : mods) {
-                        switch (mod) {
-                            case Modification.ClassKW(ClassKeyword keyword, Mode mode) ->
-                                    keyword.toggle(node, mode == Mode.ADD);
+                        for (Modification mod : mods) {
+                            switch (mod) {
+                                case Modification.ClassKW(ClassKeyword keyword, Mode mode) ->
+                                        keyword.toggle(node, mode == Mode.ADD);
 
-                            case Modification.FieldKW(FieldKeyword keyword, Mode mode, String fieldName) ->
-                                    keyword.toggle(node.fields.stream()
-                                                              .filter(f -> f.name.equals(fieldName))
-                                                              .findAny()
-                                                              .orElseThrow(), mode == Mode.ADD);
+                                case Modification.FieldKW(FieldKeyword keyword, Mode mode, String fieldName) ->
+                                        keyword.toggle(node.fields.stream()
+                                                                  .filter(f -> f.name.equals(fieldName))
+                                                                  .findAny()
+                                                                  .orElseThrow(), mode == Mode.ADD);
 
-                            case Modification.MethodKW(MethodKeyword keyword, Mode mode, String signature) ->
-                                    keyword.toggle(node.methods.stream()
-                                                               .filter(f -> (f.name + f.desc).equals(signature))
-                                                               .findAny()
-                                                               .orElseThrow(), mode == Mode.ADD);
+                                case Modification.MethodKW(MethodKeyword keyword, Mode mode, String signature) ->
+                                        keyword.toggle(node.methods.stream()
+                                                                   .filter(f -> (f.name + f.desc).equals(signature))
+                                                                   .findAny()
+                                                                   .orElseThrow(), mode == Mode.ADD);
 
-                            default ->
-                                    throw new UnsupportedOperationException("Unsupported operation %s".formatted(mod));
+                                default ->
+                                        throw new UnsupportedOperationException("Unsupported operation %s".formatted(mod));
+                            }
                         }
+                    } catch (Exception e) {
+                        IO.println("[AccessEditors] !!!!!!!!!!!!!!!!!!!!!!");
+                        IO.println("[AccessEditors] !!!!!!!!!!!!!!!!!!!!!!");
+                        IO.println("[AccessEditors] Unable to transform %s".formatted(className));
+                        IO.println("[AccessEditors] !!!!!!!!!!!!!!!!!!!!!!");
+                        IO.println("[AccessEditors] !!!!!!!!!!!!!!!!!!!!!!");
+                        IO.println("[AccessEditors] ");
+
+                        e.printStackTrace();
+
+                        System.exit(1);
                     }
 
                     var writer = new ClassWriter(0);

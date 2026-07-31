@@ -1,0 +1,8 @@
+accesseditor v1["on" official]   # <-- used mapping
+               ["mc" 26.1]       # <-- mc version
+
+# test
+
+-final field net/minecraft/core/component/DataComponents CUSTOM_DATA
+
+# abc
