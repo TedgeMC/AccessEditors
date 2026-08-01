@@ -33,8 +33,8 @@ public enum FieldKeyword {
     FINAL(ACC_FINAL, false, true),
     TRANSIENT(ACC_TRANSIENT, true, true),
     VOLATILE(ACC_VOLATILE, true, true),
-    SYNCHRONIZED(ACC_SYNCHRONIZED, true, true),
-    STRICTFP(ACC_STRICT, true, false);
+    SYNCHRONIZED(),
+    STRICTFP();
 
     private final int access;
     private final Function<FieldNode, Boolean> canAdd;

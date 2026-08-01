@@ -41,7 +41,7 @@ public enum ClassKeyword {
     TRANSIENT,
     VOLATILE(),
     SYNCHRONIZED(),
-    STRICTFP(ACC_STRICT, true, false);
+    STRICTFP();
 
     private final int access;
     private final Function<ClassNode, Boolean> canAdd;
