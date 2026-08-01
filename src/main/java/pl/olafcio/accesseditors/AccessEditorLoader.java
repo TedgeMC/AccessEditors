@@ -48,10 +48,9 @@ public class AccessEditorLoader {
         {
             if (lexer.now(' '));
             else if (lexer.now('\n'));
-            else if (lexer.now("#"))
+            else if (lexer.now("#")) {
                 lexer.until('\n');
-            else if (lexer.now("["))
-            {
+            } else if (lexer.now("[")) {
                 lexer.expect('"');
 
                 var key = lexer.until('"');
@@ -65,9 +64,16 @@ public class AccessEditorLoader {
                     lexer.until('\n');
 
                 lexer.expect('\n');
-            }
-            else
-            {
+            } else if (lexer.now("implement")) {
+                lexer.expect(' ');
+
+                var className = lexer.until(' ');
+                lexer.expect(" += ");
+                var interfaceName = lexer.until('\n');
+
+                modifications.computeIfAbsent(className, _ -> new ArrayList<>())
+                             .add(new Modification.ClassImplement(interfaceName));
+            } else {
                 modification:
                 {
                     Mode mode;
@@ -181,6 +187,9 @@ public class AccessEditorLoader {
                                                                    .filter(f -> (f.name + f.desc).equals(signature))
                                                                    .findAny()
                                                                    .orElseThrow(), mode == Mode.ADD);
+
+                                case Modification.ClassImplement(String interfacePath) ->
+                                        node.interfaces.add(interfacePath);
 
                                 default ->
                                         throw new UnsupportedOperationException("Unsupported operation %s".formatted(mod));

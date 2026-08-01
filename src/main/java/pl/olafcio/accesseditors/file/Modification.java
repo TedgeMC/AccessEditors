@@ -8,4 +8,6 @@ public sealed interface Modification {
     record ClassKW(ClassKeyword keyword, Mode mode) implements Modification {}
     record FieldKW(FieldKeyword keyword, Mode mode, String name) implements Modification {}
     record MethodKW(MethodKeyword keyword, Mode mode, String signature) implements Modification {}
+
+    record ClassImplement(String interfacePath) implements Modification {}
 }
