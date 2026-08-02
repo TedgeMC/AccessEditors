@@ -171,30 +171,7 @@ public class AccessEditorLoader {
                     try {
                         var mods = modifications.get(className);
 
-                        for (Modification mod : mods) {
-                            switch (mod) {
-                                case Modification.ClassKW(ClassKeyword keyword, Mode mode) ->
-                                        keyword.toggle(node, mode == Mode.ADD);
-
-                                case Modification.FieldKW(FieldKeyword keyword, Mode mode, String fieldName) ->
-                                        keyword.toggle(node.fields.stream()
-                                                                  .filter(f -> f.name.equals(fieldName))
-                                                                  .findAny()
-                                                                  .orElseThrow(), mode == Mode.ADD);
-
-                                case Modification.MethodKW(MethodKeyword keyword, Mode mode, String signature) ->
-                                        keyword.toggle(node.methods.stream()
-                                                                   .filter(f -> (f.name + f.desc).equals(signature))
-                                                                   .findAny()
-                                                                   .orElseThrow(), mode == Mode.ADD);
-
-                                case Modification.ClassImplement(String interfacePath) ->
-                                        node.interfaces.add(interfacePath);
-
-                                default ->
-                                        throw new UnsupportedOperationException("Unsupported operation %s".formatted(mod));
-                            }
-                        }
+                        applyProvided(mods, node);
                     } catch (Exception e) {
                         IO.println("[AccessEditors] !!!!!!!!!!!!!!!!!!!!!!");
                         IO.println("[AccessEditors] !!!!!!!!!!!!!!!!!!!!!!");
@@ -216,6 +193,33 @@ public class AccessEditorLoader {
                 return null;
             }
         });
+    }
+
+    public void applyProvided(ArrayList<Modification> mods, ClassNode node) {
+        for (Modification mod : mods) {
+            switch (mod) {
+                case Modification.ClassKW(ClassKeyword keyword, Mode mode) ->
+                        keyword.toggle(node, mode == Mode.ADD);
+
+                case Modification.FieldKW(FieldKeyword keyword, Mode mode, String fieldName) ->
+                        keyword.toggle(node.fields.stream()
+                                                  .filter(f -> f.name.equals(fieldName))
+                                                  .findAny()
+                                                  .orElseThrow(), mode == Mode.ADD);
+
+                case Modification.MethodKW(MethodKeyword keyword, Mode mode, String signature) ->
+                        keyword.toggle(node.methods.stream()
+                                                   .filter(f -> (f.name + f.desc).equals(signature))
+                                                   .findAny()
+                                                   .orElseThrow(), mode == Mode.ADD);
+
+                case Modification.ClassImplement(String interfacePath) ->
+                        node.interfaces.add(interfacePath);
+
+                default ->
+                        throw new UnsupportedOperationException("Unsupported operation %s".formatted(mod));
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
