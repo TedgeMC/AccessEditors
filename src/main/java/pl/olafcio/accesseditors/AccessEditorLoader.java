@@ -217,4 +217,10 @@ public class AccessEditorLoader {
             }
         });
     }
+
+    @SuppressWarnings("unchecked")
+    public HashMap<String, ArrayList<Modification>> getModifications() {
+        return (HashMap<String, ArrayList<Modification>>)
+               modifications.clone();
+    }
 }
